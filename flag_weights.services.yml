@@ -1,0 +1,5 @@
+services:
+  flag_weights.flag_subscriber:
+    class: Drupal\flag_weights\EventSubscriber\FlagWeightsDefault
+    tags:
+      - { name: event_subscriber }

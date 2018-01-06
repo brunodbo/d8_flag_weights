@@ -1,0 +1,175 @@
+<?php
+
+/**
+ * @file
+ * Flag weights module.
+ */
+
+use Drupal\Core\Database\Database;
+use Drupal\Core\Form\FormStateInterface;
+
+define('MIN_DEFAULT_WEIGHT', -2147483648);
+define('MAX_DEFAULT_WEIGHT', 2147483647);
+
+/**
+ * Implements hook_views_data().
+ *
+ * Provide a field that can be used to sort a view.
+ */
+function flag_weights_views_data() {
+  $data = [];
+
+  $data['flagging']['weight'] = [
+    'title' => t('Weight'),
+    'help' => t('Used for sorting the list of flagged items.'),
+    'real field' => 'weight',
+    'field' => [
+      'handler' => 'views_handler_field_numeric',
+      'click sortable' => TRUE,
+    ],
+    'sort' => [
+      'handler' => 'views_handler_sort_flag_weights',
+    ],
+  ];
+
+  return $data;
+}
+
+/**
+ * Flag an item using the given Flag name.
+ *
+ * @param $flag_name
+ *   The content-type for the flag, eg: node.
+ * @see _flag_weights_flag()
+ */
+function flag_weights_set_flag($entity_type, $entity_id, $account = NULL, $weight = 0) {
+  $handler = flag_create_handler($entity_type);
+  return _flag_weights_flag($handler, $entity_id, $account, $weight);
+}
+
+/**
+ * Flag an item using the given Flag name.
+ *
+ * @param $flag_name
+ *   The machine-name for the flag to use, eg: bookmarks.
+ * @see _flag_weights_flag()
+ */
+function flag_weights_set_flag_with_flag($flag_name, $entity_id, $account = NULL, $weight = 0) {
+  $handler = flag_get_flag($flag_name);
+  return _flag_weights_flag($handler, $entity_id, $account, $weight);
+}
+
+/**
+ * Flags an item, and set its weight.
+ *
+ * @param $handler
+ *   The Flag to use
+ * @param $content_id
+ *   The ID of the item to flag or unflag.
+ * @param $account
+ *   The user on whose behalf to flag. Leave empty for the current user.
+ * @param $weight
+ *   A weight used for ordering the item within the flagged-items list.
+ * @return
+ *   FALSE if some error occured (e.g., user has no permission, flag isn't
+ *   applicable to the item, etc.), TRUE otherwise.
+ */
+function _flag_weights_flag($handler, $entity_id, $account = NULL, $weight = 0) {
+  $ok = $handler->flag('flag', $entity_id, $account);
+  if ($ok && $weight != 0) {
+    if (!isset($account)) {
+      $account = \Drupal::currentUser();
+    }
+    flag_weights_set_weight($handler->flag_id, $handler->entity_type, $entity_id, $account->uid, $weight);
+  }
+  return $ok;
+}
+
+/**
+ * Update the weight of an existing flagged item.
+ */
+function flag_weights_set_weight($flag_id, $entity_type, $entity_id, $uid, $weight) {
+  $db_connection = Database::getConnection();
+  $db_connection->update('flagging')
+    ->fields([
+      'weight' => $weight,
+    ])
+    ->condition('flag_id', $flag_id)
+    ->condition('entity_type', $entity_type)
+    ->condition('entity_id', $entity_id)
+    ->condition('uid', $uid)
+    ->execute();
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function flag_weights_ctools_plugin_directory($module, $plugin) {
+	if (($module == 'draggableviews') && ($plugin == 'handler')) {
+		return 'handlers';
+	}
+}
+
+/**
+ * Implements hook_form_FORMID_alter().
+ *
+ * Add the default-weight setting to the Flags edit page.
+ */
+function flag_weights_form_flag_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  $default_weight = _flag_weights_get_default_weight($form['#flag']->id());
+  if ($default_weight == MIN_DEFAULT_WEIGHT) {
+    $default_weight = 'MIN';
+  }
+  elseif ($default_weight == MAX_DEFAULT_WEIGHT) {
+    $default_weight = 'MAX';
+  }
+
+  $form['flag_weights'] = [
+    '#type' => 'details',
+    '#open' => TRUE,
+    '#title' => t('Flag weights'),
+    '#weight' => 15,
+  ];
+
+  $form['flag_weights']['default_flagging_weight'] = [
+    '#type' => 'textfield',
+    '#title' => t('Default flagging weight'),
+    '#default_value' => $default_weight,
+    '#description' => t('Enter the default weight for flaggings of this type (or MIN/MAX to set the weight lower/higher than existing content respectively).'),
+    '#required' => TRUE,
+    '#weight' => 0,
+    '#length' => 3,
+  ];
+
+  $form['actions']['submit']['#submit'][] = 'flag_weights_flag_form_submit';
+}
+
+/**
+ * Custom submit handler for flag_form form.
+ */
+function flag_weights_flag_form_submit(&$form, FormStateInterface $form_state) {
+  // Parse the textfield to determine the value to apply to the DB
+  $default_weight = $form_state->getValue('default_flagging_weight');
+  if (strcasecmp($default_weight, 'MIN') == 0) {
+    $default_weight = MIN_DEFAULT_WEIGHT;
+  }
+  elseif (strcasecmp($default_weight, 'MAX') == 0) {
+    $default_weight = MAX_DEFAULT_WEIGHT;
+  }
+
+  // By the time this is executed, the Flag will already have been inserted/updated
+  // so $flag->id is set
+  _flag_weights_set_default_weight($form['#flag']->id(), $default_weight);
+}
+
+function _flag_weights_get_default_weight($fid) {
+  $flag_config = 'flag.flag.' . $fid;
+  return \Drupal::config($flag_config)->get('default_flagging_weight');
+}
+
+function _flag_weights_set_default_weight($fid, $default_weight) {
+  $flag_config = 'flag.flag.' . $fid;
+  \Drupal::configFactory()->getEditable($flag_config)
+    ->set('default_flagging_weight', $default_weight)
+    ->save();
+}

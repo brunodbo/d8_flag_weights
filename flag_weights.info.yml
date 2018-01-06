@@ -1,0 +1,7 @@
+name: 'Flag Weights'
+description: 'Add flag-weights to the Flag module.'
+package: Flags
+core: 8.x
+dependencies:
+  - flag
+type: module

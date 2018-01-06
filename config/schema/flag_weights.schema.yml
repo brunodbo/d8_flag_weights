@@ -1,0 +1,7 @@
+flag.flag.*.third_party.default_flagging_weight:
+  type: mapping
+  label: 'Default flagging weight'
+  mapping:
+    default_flagging_weight:
+      type: integer
+      label: 'Default flagging weight'
