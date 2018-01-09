@@ -3,6 +3,9 @@
 /**
  * @file
  * Contains \Drupal\flag_weights\EventSubscriber\FlagWeightsDefault.
+ * Sets the default flag_weights value when a flagging is created.
+ * @todo: Add an option to turn on/off flag_weights functionality on a per flag
+ * basis, so this only runs for relevant flags.
  */
 
 namespace Drupal\flag_weights\EventSubscriber;
