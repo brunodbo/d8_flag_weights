@@ -5,6 +5,8 @@
  * Flag weights module.
  */
 
+use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Form\FormStateInterface;
 
@@ -12,27 +14,27 @@ define('MIN_DEFAULT_WEIGHT', -2147483648);
 define('MAX_DEFAULT_WEIGHT', 2147483647);
 
 /**
- * Implements hook_views_data().
+ * Implements hook_entity_base_field_info().
  *
- * Provide a field that can be used to sort a view.
+ * Add 'weight' base field to flagging entity. A 'weight' database column will
+ * be added to the 'flagging' table when this module is enabled.
+ *
+ * @todo: The 'weight' column is currently nullable, with a default value of NULL.
+ * Does that matter? Can/should we change that using setSettings()?
  */
-function flag_weights_views_data() {
-  $data = [];
+function flag_weights_entity_base_field_info(EntityTypeInterface $entity_type) {
+  if ($entity_type->id() !== 'flagging') {
+    return;
+  }
+  $fields = [];
+  $fields['weight'] = BaseFieldDefinition::create('integer')
+    ->setLabel(t('Weight'))
+    ->setDescription(t('The flagging\'s weight.'))
+    ->setSettings([
+      'default_value' => 0,
+    ]);
 
-  $data['flagging']['weight'] = [
-    'title' => t('Weight'),
-    'help' => t('Used for sorting the list of flagged items.'),
-    'real field' => 'weight',
-    'field' => [
-      'handler' => 'views_handler_field_numeric',
-      'click sortable' => TRUE,
-    ],
-    'sort' => [
-      'handler' => 'views_handler_sort_flag_weights',
-    ],
-  ];
-
-  return $data;
+  return $fields;
 }
 
 /**
